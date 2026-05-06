@@ -13,11 +13,6 @@ namespace mtsLib
             if (t.joinable()) t.join();
     }
 
-    void task::add(std::function<void()> task)
-    {
-        addTask(std::move(task));
-    }
-
     void task::add(std::queue<std::function<void()>> tasks)
     {
         while (!tasks.empty())
