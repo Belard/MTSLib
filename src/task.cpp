@@ -13,15 +13,6 @@ namespace mtsLib
             if (t.joinable()) t.join();
     }
 
-    void task::add(std::queue<std::function<void()>> tasks)
-    {
-        while (!tasks.empty())
-        {
-            addTask(std::move(tasks.front()));
-            tasks.pop();
-        }
-    }
-
     void task::execute()
     {
         for (auto i = 0; i < m_threadNumber; i++)
@@ -43,11 +34,11 @@ namespace mtsLib
 
     void task::addTask(std::function<void()> task)
     {
-        {
-            std::unique_lock<std::mutex> lock(m_taskExecutorMutex);
-            m_tasks.push(std::move(task));
-        }
-        m_taskExecutorCondition.notify_one();
+        
+        std::unique_lock<std::mutex> lock(m_taskExecutorMutex);
+        if (m_stopTaskExecutor.load())
+            throw std::runtime_error("add called after executor stop");
+        m_tasks.push(std::move(task));
     }
 
     std::function<void()> task::getTask()

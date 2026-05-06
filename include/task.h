@@ -18,7 +18,6 @@ namespace mtsLib
             task(int threadNumber);
             ~task();
 
-            void add(std::queue<std::function<void()>> tasks);
             void execute();
 
             template <typename F, typename... Args>
@@ -36,16 +35,15 @@ namespace mtsLib
 
                 std::future<ReturnType> result = packaged->get_future();
 
-                {
-                    std::unique_lock<std::mutex> lock(m_taskExecutorMutex);
-                    if (m_stopTaskExecutor.load())
-                        throw std::runtime_error("add called after executor stop");
-
-                    m_tasks.push([packaged]() { (*packaged)(); });
-                }
-
+                addTask([packaged]() { (*packaged)(); });
                 m_taskExecutorCondition.notify_one();
                 return result;
+            }
+
+            template <typename... Fs>
+            auto addAll(Fs&&... fs) -> std::tuple<std::future<std::invoke_result_t<Fs>>...>
+            {
+                return std::make_tuple(add(std::forward<Fs>(fs))...);
             }
 
         private:

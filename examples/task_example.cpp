@@ -52,7 +52,7 @@ int main()
             });
         }
 
-        t.add(std::move(batch));
+        t.addAll(std::move(batch));
 
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         std::cout << "  Batch tasks completed: " << counter.load() << "/8\n\n";
