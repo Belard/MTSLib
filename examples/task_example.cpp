@@ -109,6 +109,55 @@ int main()
         std::cout << "  Tasks completed: " << counter.load() << "/10\n\n";
     }
 
+    // --- Test 5: stop() function demonstration (execute -> stop -> execute) ---
+    {
+        std::cout << "[Test 5] stop() and re-execute demonstration\n";
+
+        std::atomic<int> completed{ 0 };
+        mtsLib::task t(2);
+
+        // Phase 1: First execute() and add tasks
+        std::cout << "  Phase 1: First execute()\n";
+        t.execute();
+
+        for (int i = 0; i < 3; i++)
+        {
+            t.add([&completed, i]() {
+                std::cout << "    Phase 1 - Task " << i << " completed\n";
+                completed.fetch_add(1);
+            });
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::cout << "  Phase 1 finished: " << completed.load() << "/3 tasks completed\n\n";
+
+        // Phase 2: Stop the executor
+        std::cout << "  Phase 2: Calling stop()\n";
+        t.stop();
+        std::cout << "  Executor stopped. Threads joined.\n\n";
+
+        // Phase 3: Execute again and add more tasks
+        std::cout << "  Phase 3: Second execute() after stop()\n";
+        completed.store(0);
+        t.execute();
+
+        std::cout << "  Adding new tasks after restart...\n";
+        for (int i = 0; i < 3; i++)
+        {
+            t.add([i]() {
+                std::cout << "    Phase 3 - Task " << i << " completed\n";
+            });
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::cout << "  Phase 3 finished: Executor restarted and ran new tasks\n\n";
+
+        // Phase 4: Final stop
+        std::cout << "  Phase 4: Final stop()\n";
+        t.stop();
+        std::cout << "  Executor stopped again.\n\n";
+    }
+
     std::cout << "All tests done.\n";
     return 0;
 }

@@ -7,18 +7,25 @@ namespace mtsLib
 
     task::~task()
     {
-        m_stopTaskExecutor.store(true);
-        m_taskExecutorCondition.notify_all();
-        for (auto& t : m_threads)
-            if (t.joinable()) t.join();
+        stop();
     }
 
     void task::execute()
     {
+        m_stopTaskExecutor.store(false);
         for (auto i = 0; i < m_threadNumber; i++)
         {
             m_threads.emplace_back(&task::taskExecutor, this);
         }
+    }
+
+    void task::stop()
+    {
+        m_stopTaskExecutor.store(true);
+        m_taskExecutorCondition.notify_all();
+        for (auto& t : m_threads)
+            if (t.joinable()) t.join();
+        m_threads.clear();
     }
 
     void task::taskExecutor()
@@ -49,7 +56,7 @@ namespace mtsLib
         m_taskExecutorCondition.wait(lock, [this] { 
             return !m_tasks.empty() || m_stopTaskExecutor.load(); 
         });
-        if (m_stopTaskExecutor.load() && m_tasks.empty())
+        if (m_stopTaskExecutor.load())
             return nullptr;
 
         task = std::move(m_tasks.front());

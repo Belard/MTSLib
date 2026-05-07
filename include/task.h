@@ -19,6 +19,7 @@ namespace mtsLib
             ~task();
 
             void execute();
+            void stop();
 
             template <typename F, typename... Args>
             auto add(F&& f, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>>
