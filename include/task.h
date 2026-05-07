@@ -20,6 +20,10 @@ namespace mtsLib
 
             void execute();
             void stop();
+            void waitForAll();
+            int  getTotalPendingTaskCount() const;
+            int  getQueuedTaskCount() const;   
+            bool isRunning() const;
 
             template <typename F, typename... Args>
             auto add(F&& f, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>>
@@ -36,7 +40,12 @@ namespace mtsLib
 
                 std::future<ReturnType> result = packaged->get_future();
 
-                addTask([packaged]() { (*packaged)(); });
+                m_pendingTasks.fetch_add(1);
+                addTask([packaged, this]() { 
+                    (*packaged)(); 
+                    m_pendingTasks.fetch_sub(1);
+                    m_pendingTasksCondition.notify_all();
+                });
                 m_taskExecutorCondition.notify_one();
                 return result;
             }
@@ -50,9 +59,12 @@ namespace mtsLib
         private:
             std::queue<std::function<void()>> m_tasks;
 
-            std::mutex m_taskExecutorMutex;
+            mutable std::mutex m_taskExecutorMutex;
             std::condition_variable m_taskExecutorCondition;
+            std::mutex m_pendingTasksMutex;
+            std::condition_variable m_pendingTasksCondition;
             std::atomic<bool> m_stopTaskExecutor{ false };
+            std::atomic<int> m_pendingTasks{ 0 };
 
             void taskExecutor();
             void addTask(std::function<void()> task);

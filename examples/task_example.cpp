@@ -158,6 +158,137 @@ int main()
         std::cout << "  Executor stopped again.\n\n";
     }
 
+    // --- Test 6: isRunning() state checks ---
+    {
+        std::cout << "[Test 6] isRunning() state checks\n";
+
+        mtsLib::task t(2);
+
+        std::cout << "  Before execute(): isRunning() = " << std::boolalpha << t.isRunning() << "\n";
+        t.execute();
+        std::cout << "  After  execute(): isRunning() = " << t.isRunning() << "\n";
+        t.stop();
+        std::cout << "  After  stop()   : isRunning() = " << t.isRunning() << "\n\n";
+    }
+
+    // --- Test 7: getQueuedTaskCount() and getTotalPendingTaskCount() (simple) ---
+    {
+        std::cout << "[Test 7] getQueuedTaskCount() and getTotalPendingTaskCount() - simple\n";
+
+        mtsLib::task t(1); // single thread so we can reason about queue depth
+        t.execute();
+
+        // Block the single worker so queued tasks pile up
+        std::mutex gate;
+        std::unique_lock<std::mutex> hold(gate);
+
+        std::condition_variable cv;
+        std::atomic<bool> workerBlocked{ false };
+
+        // First task holds the worker
+        t.add([&gate, &cv, &workerBlocked]() {
+            workerBlocked.store(true);
+            cv.notify_all();
+            std::unique_lock<std::mutex> lk(gate); // blocks until hold is released
+        });
+
+        // Wait until the worker is inside the blocking task
+        {
+            std::mutex waitMtx;
+            std::unique_lock<std::mutex> wlk(waitMtx);
+            cv.wait(wlk, [&workerBlocked] { return workerBlocked.load(); });
+        }
+
+        // Now enqueue 3 more tasks while the worker is blocked
+        for (int i = 0; i < 3; i++)
+            t.add([i]() { /* no-op */ });
+
+        std::cout << "  Queue depth (getQueuedTaskCount):       " << t.getQueuedTaskCount() << " (expected 3)\n";
+        std::cout << "  Running tasks (getTotalPendingTaskCount): " << t.getTotalPendingTaskCount() << " (expected 1+)\n";
+
+        // Release the gate so the worker can finish
+        hold.unlock();
+        t.waitForAll();
+
+        std::cout << "  After waitForAll() - queue depth:    " << t.getQueuedTaskCount() << " (expected 0)\n";
+        std::cout << "  After waitForAll() - running tasks:  " << t.getTotalPendingTaskCount() << " (expected 0)\n\n";
+    }
+
+    // --- Test 8: waitForAll() - harder concurrent producer case ---
+    {
+        std::cout << "[Test 8] waitForAll() with concurrent producers\n";
+
+        mtsLib::task t(4);
+        t.execute();
+
+        constexpr int producerCount = 4;
+        constexpr int tasksPerProducer = 25;
+        std::atomic<int> completed{ 0 };
+
+        // Multiple producer threads each submit tasks
+        std::vector<std::thread> producers;
+        producers.reserve(producerCount);
+        for (int p = 0; p < producerCount; p++)
+        {
+            producers.emplace_back([&t, &completed, p]() {
+                for (int i = 0; i < tasksPerProducer; i++)
+                {
+                    t.add([&completed, p, i]() {
+                        // Simulate varying work durations
+                        std::this_thread::sleep_for(std::chrono::microseconds((p + 1) * 10));
+                        completed.fetch_add(1);
+                    });
+                }
+            });
+        }
+        for (auto& p : producers) p.join();
+
+        std::cout << "  All producers submitted " << producerCount * tasksPerProducer << " tasks. Waiting...\n";
+        t.waitForAll();
+
+        const int total = producerCount * tasksPerProducer;
+        std::cout << "  Completed: " << completed.load() << "/" << total
+                  << (completed.load() == total ? "  [PASS]" : "  [FAIL]") << "\n";
+        std::cout << "  Pending queue after waitForAll(): " << t.getQueuedTaskCount() << "\n";
+        std::cout << "  Running tasks after waitForAll(): " << t.getTotalPendingTaskCount() << "\n\n";
+    }
+
+    // --- Test 9: waitForAll() + add() futures - harder pipeline ---
+    {
+        std::cout << "[Test 9] waitForAll() with future results pipeline\n";
+
+        mtsLib::task t(4);
+        t.execute();
+
+        constexpr int n = 10;
+        std::vector<std::future<int>> futures;
+        futures.reserve(n);
+
+        // Stage 1: compute squares
+        for (int i = 1; i <= n; i++)
+            futures.push_back(t.add([i]() -> int {
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                return i * i;
+            }));
+
+        t.waitForAll();
+        std::cout << "  Stage 1 (squares): ";
+        int sum = 0;
+        for (auto& f : futures)
+        {
+            int v = f.get();
+            sum += v;
+            std::cout << v << " ";
+        }
+        std::cout << "\n  Sum of squares 1..10 = " << sum << " (expected 385)\n";
+
+        // Stage 2: submit a single aggregation task and await it
+        auto agg = t.add([sum]() -> std::string {
+            return sum == 385 ? "Correct!" : "Wrong!";
+        });
+        std::cout << "  Aggregation result: " << agg.get() << "\n\n";
+    }
+
     std::cout << "All tests done.\n";
     return 0;
 }

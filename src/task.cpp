@@ -28,6 +28,30 @@ namespace mtsLib
         m_threads.clear();
     }
 
+    void task::waitForAll()
+    {
+        std::unique_lock<std::mutex> lock(m_pendingTasksMutex);
+        m_pendingTasksCondition.wait(lock, [this] { 
+            return m_pendingTasks.load() == 0 && m_tasks.empty(); 
+        });
+    }
+
+    int task::getTotalPendingTaskCount() const
+    {
+        return m_pendingTasks.load();
+    }
+
+    int task::getQueuedTaskCount() const
+    {
+        std::lock_guard<std::mutex> lock(m_taskExecutorMutex);
+        return m_tasks.size();
+    }
+
+    bool task::isRunning() const
+    {
+        return !m_stopTaskExecutor.load();
+    }
+
     void task::taskExecutor()
     {
         while (true) 
