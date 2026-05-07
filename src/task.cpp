@@ -35,9 +35,9 @@ namespace mtsLib
     void task::addTask(std::function<void()> task)
     {
         
-        std::unique_lock<std::mutex> lock(m_taskExecutorMutex);
+        std::lock_guard<std::mutex> lock(m_taskExecutorMutex);
         if (m_stopTaskExecutor.load())
-            throw std::runtime_error("add called after executor stop");
+            throw std::runtime_error("MTSLib: addTask called after executor stop");
         m_tasks.push(std::move(task));
     }
 
