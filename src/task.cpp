@@ -12,6 +12,8 @@ namespace mtsLib
 
     void task::execute()
     {
+        if (isRunning())
+            throw std::runtime_error("MTSLib: execute() called while executor is already running");
         m_stopTaskExecutor.store(false);
         for (auto i = 0; i < m_threadNumber; i++)
         {

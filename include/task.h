@@ -11,20 +11,77 @@
 
 namespace mtsLib
 {
+    /**
+     * @brief Multithreaded task executor with future-based task submission.
+     *
+     * The executor runs tasks on a fixed number of worker threads inherited
+     * from ImtsResource. Tasks are submitted with add() and observed through
+     * futures.
+     */
     class task : public ImtsResource
     {
         public:
+            /**
+             * @brief Construct a task executor using the default thread count.
+             */
             task();
+
+            /**
+             * @brief Construct a task executor with an explicit worker count.
+             * @param threadNumber Number of worker threads to create on execute().
+             */
             task(int threadNumber);
+
+            /**
+             * @brief Stop all workers and release executor resources.
+             */
             ~task();
 
+            /**
+             * @brief Start worker threads.
+             * @throws std::runtime_error If called while executor is already running.
+             */
             void execute();
+
+            /**
+             * @brief Signal workers to stop and join all threads.
+             *
+             * After this call, workers exit and queued tasks are no longer consumed.
+             */
             void stop();
+
+            /**
+             * @brief Block until no pending and no queued tasks remain.
+             */
             void waitForAll();
+
+            /**
+             * @brief Get the current number of pending tasks.
+             * @return Pending task count.
+             */
             int  getTotalPendingTaskCount() const;
+
+            /**
+             * @brief Get the current number of queued tasks.
+             * @return Number of tasks currently in the internal queue.
+             */
             int  getQueuedTaskCount() const;   
+
+            /**
+             * @brief Check whether the executor is in running state.
+             * @return true when stop flag is not set, false otherwise.
+             */
             bool isRunning() const;
 
+            /**
+             * @brief Submit a callable and return a future for its result.
+             * @tparam F Callable type.
+             * @tparam Args Callable argument types.
+             * @param f Callable object.
+             * @param args Arguments forwarded to the callable.
+             * @return Future associated with callable execution result.
+             * @throws std::runtime_error If submission occurs after stop().
+             */
             template <typename F, typename... Args>
             auto add(F&& f, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>>
             {
@@ -50,6 +107,12 @@ namespace mtsLib
                 return result;
             }
 
+            /**
+             * @brief Submit multiple zero-argument callables.
+             * @tparam Fs Callable types.
+             * @param fs Callables to submit.
+             * @return Tuple of futures in the same order as provided callables.
+             */
             template <typename... Fs>
             auto addAll(Fs&&... fs) -> std::tuple<std::future<std::invoke_result_t<Fs>>...>
             {
@@ -57,17 +120,41 @@ namespace mtsLib
             }
 
         private:
+            /** @brief FIFO queue that stores submitted tasks. */
             std::queue<std::function<void()>> m_tasks;
 
+            /** @brief Protects access to m_tasks. */
             mutable std::mutex m_taskExecutorMutex;
+
+            /** @brief Wakes worker threads when tasks are available or stop is requested. */
             std::condition_variable m_taskExecutorCondition;
+
+            /** @brief Synchronizes waitForAll() waiting logic. */
             std::mutex m_pendingTasksMutex;
+
+            /** @brief Notifies waiters when pending task state changes. */
             std::condition_variable m_pendingTasksCondition;
+
+            /** @brief Stop flag used by workers and running-state checks. */
             std::atomic<bool> m_stopTaskExecutor{ false };
+
+            /** @brief Count of tasks pending completion. */
             std::atomic<int> m_pendingTasks{ 0 };
 
+            /** @brief Worker thread loop that fetches and executes tasks. */
             void taskExecutor();
+
+            /**
+             * @brief Push a task into the queue.
+             * @param task Task to queue.
+             * @throws std::runtime_error If called after stop().
+             */
             void addTask(std::function<void()> task);
+
+            /**
+             * @brief Wait for and retrieve next queued task.
+             * @return Next task, or nullptr-like callable when stop is requested.
+             */
             std::function<void()> getTask();
     };
 }
