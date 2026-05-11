@@ -8,6 +8,7 @@
 #include <atomic>
 #include <future>
 #include <tuple>
+#include <barrier>
 
 namespace mtsLib
 {
@@ -42,6 +43,13 @@ namespace mtsLib
              * @throws std::runtime_error If called while executor is already running.
              */
             void execute();
+
+            /**
+            * @brief Syncronize all tasks to start at the same time. (If there more tasks than threads, they will run in batches)
+            * @param batch If true, tasks will run in batches of thread count. If false, the tasks will run as much as the threads allow at the same time and close.
+            * @throws std::runtime_error If called while executor is already running.
+            */
+            void synchronizedExecute(bool batch = false);
 
             /**
              * @brief Signal workers to stop and join all threads.
@@ -136,13 +144,19 @@ namespace mtsLib
             std::condition_variable m_pendingTasksCondition;
 
             /** @brief Stop flag used by workers and running-state checks. */
-            std::atomic<bool> m_stopTaskExecutor{ false };
+            std::atomic<bool> m_stopTaskExecutor{ true };
 
             /** @brief Count of tasks pending completion. */
             std::atomic<int> m_pendingTasks{ 0 };
 
             /** @brief Worker thread loop that fetches and executes tasks. */
             void taskExecutor();
+
+            /** @brief Worker thread loop that fetches and executes tasks in synchronized mode.
+             * @param batch If true, tasks will run in batches of thread count. If false, the tasks will run as much as the threads allow at the same time and close.
+             * @param taskBarrier Barrier used to synchronize task execution.
+             */
+            void synchronizedTaskExecutor(bool batch, std::shared_ptr<std::barrier<>> taskBarrier);
 
             /**
              * @brief Push a task into the queue.

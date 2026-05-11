@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <thread>
@@ -287,6 +288,76 @@ int main()
             return sum == 385 ? "Correct!" : "Wrong!";
         });
         std::cout << "  Aggregation result: " << agg.get() << "\n\n";
+    }
+
+    // --- Test 10: synchronizedExecute() - batch=false (default) ---
+    // Each worker picks up exactly one task, all tasks wait for every thread to
+    // be ready before any of them starts executing, then threads exit.
+    {
+        std::cout << "[Test 10] synchronizedExecute() - batch=false (one-shot synchronized start)\n";
+
+        constexpr int threadCount = 4;
+        mtsLib::task t(threadCount);
+
+        std::vector<std::chrono::steady_clock::time_point> startTimes(threadCount);
+        std::atomic<int> index{ 0 };
+
+        // Queue exactly threadCount tasks before calling synchronizedExecute so
+        // every worker has a task to pick up before the latch fires.
+        for (int i = 0; i < threadCount; i++)
+        {
+            t.add([&startTimes, &index]() {
+                int slot = index.fetch_add(1);
+                startTimes[slot] = std::chrono::steady_clock::now();
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            });
+        }
+
+        t.synchronizedExecute(false); // batch=false: threads exit after one task
+
+        t.waitForAll();
+
+        // Measure spread between the earliest and latest start time
+        auto minT = *std::min_element(startTimes.begin(), startTimes.end());
+        auto maxT = *std::max_element(startTimes.begin(), startTimes.end());
+        auto spreadUs = std::chrono::duration_cast<std::chrono::microseconds>(maxT - minT).count();
+        std::cout << "  All " << threadCount << " tasks ran simultaneously.\n";
+        std::cout << "  Start-time spread: " << spreadUs << " us (should be small)\n\n";
+    }
+
+    // --- Test 11: synchronizedExecute(true) - batch=true ---
+    // Workers stay alive and process tasks in synchronized batches of threadCount.
+    {
+        std::cout << "[Test 11] synchronizedExecute(true) - batched synchronized execution\n";
+
+        constexpr int threadCount = 3;
+        constexpr int totalTasks  = 9; // 3 full batches
+        mtsLib::task t(threadCount);
+
+        std::atomic<int> completed{ 0 };
+        std::atomic<int> batchIndex{ 0 };
+
+        // Queue all tasks upfront
+        for (int i = 0; i < totalTasks; i++)
+        {
+            t.add([&completed, &batchIndex, i, threadCount]() {
+                int batch = i / threadCount;
+                std::cout << "  Batch " << batch << " - task " << i << " running on thread "
+                          << std::this_thread::get_id() << "\n";
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                completed.fetch_add(1);
+            });
+        }
+
+        t.synchronizedExecute(true); // batch=true: workers keep running
+
+        std::cout << "  All tasks submitted. Waiting for completion...\n";
+
+        t.waitForAll();
+        t.stop();
+
+        std::cout << "  Completed: " << completed.load() << "/" << totalTasks
+                  << (completed.load() == totalTasks ? "  [PASS]" : "  [FAIL]") << "\n\n";
     }
 
     std::cout << "All tests done.\n";

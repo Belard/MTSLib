@@ -21,6 +21,21 @@ namespace mtsLib
         }
     }
 
+    void task::synchronizedExecute(bool batch)
+    {
+        if (isRunning())
+            throw std::runtime_error("MTSLib: synchronizedExecute() called while executor is already running");
+        m_stopTaskExecutor.store(false);
+
+        auto taskBarrier = std::make_shared<std::barrier<>>(m_threadNumber);
+
+        for (auto i = 0; i < m_threadNumber; i++)
+        {
+            m_threads.emplace_back(&task::synchronizedTaskExecutor, this, batch, taskBarrier);
+        }
+
+    }
+
     void task::stop()
     {
         m_stopTaskExecutor.store(true);
@@ -65,12 +80,23 @@ namespace mtsLib
         }
     }
 
+    void task::synchronizedTaskExecutor(bool batch, std::shared_ptr<std::barrier<>> taskBarrier)
+    {
+        while (true) 
+        {
+            std::function<void()> task = getTask();
+            if (!task)
+                return;
+            taskBarrier->arrive_and_wait();
+            task();
+            if (!batch)
+                return;
+        }
+    }
+
     void task::addTask(std::function<void()> task)
     {
-        
         std::lock_guard<std::mutex> lock(m_taskExecutorMutex);
-        if (m_stopTaskExecutor.load())
-            throw std::runtime_error("MTSLib: addTask called after executor stop");
         m_tasks.push(std::move(task));
     }
 
