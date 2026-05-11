@@ -1,3 +1,5 @@
+#pragma once
+
 #include "ImtsResource.h"
 
 class scheduler : public ImtsResource
@@ -6,7 +8,7 @@ class scheduler : public ImtsResource
 public:
     scheduler();
     
-    ~scheduler();
+    ~scheduler() override;
 
 private:
     

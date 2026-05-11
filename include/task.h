@@ -36,7 +36,7 @@ namespace mtsLib
             /**
              * @brief Stop all workers and release executor resources.
              */
-            ~task();
+            ~task() override;
 
             /**
              * @brief Start worker threads.
