@@ -28,7 +28,7 @@ int main()
 
         std::atomic<int> counter{ 0 };
         mtsLib::task t(2);
-        t.execute();
+        t.start();
 
         for (int i = 0; i < 5; i++)
         {
@@ -49,7 +49,7 @@ int main()
         std::cout << "[Test 2] Multiple tasks with addAll()\n";
 
         mtsLib::task t(4);
-        t.execute();
+        t.start();
 
         // Create multiple lambda functions and pass to addAll()
         auto futures = t.addAll(
@@ -76,7 +76,7 @@ int main()
         std::cout << "[Test 3] Task with function and arguments\n";
 
         mtsLib::task t(2);
-        t.execute();
+        t.start();
 
         // Pass function pointer with arguments
         auto future_sum = t.add(add_numbers, 10, 20);
@@ -93,7 +93,7 @@ int main()
 
         std::atomic<int> counter{ 0 };
         mtsLib::task t;
-        t.execute();
+        t.start();
 
         for (int i = 0; i < 9; i++)
         {
@@ -110,16 +110,16 @@ int main()
         std::cout << "  Tasks completed: " << counter.load() << "/10\n\n";
     }
 
-    // --- Test 5: stop() function demonstration (execute -> stop -> execute) ---
+    // --- Test 5: stop() function demonstration (start -> stop -> start) ---
     {
-        std::cout << "[Test 5] stop() and re-execute demonstration\n";
+        std::cout << "[Test 5] stop() and re-start demonstration\n";
 
         std::atomic<int> completed{ 0 };
         mtsLib::task t(2);
 
-        // Phase 1: First execute() and add tasks
-        std::cout << "  Phase 1: First execute()\n";
-        t.execute();
+        // Phase 1: First start() and add tasks
+        std::cout << "  Phase 1: First start()\n";
+        t.start();
 
         for (int i = 0; i < 3; i++)
         {
@@ -137,10 +137,10 @@ int main()
         t.stop();
         std::cout << "  Executor stopped. Threads joined.\n\n";
 
-        // Phase 3: Execute again and add more tasks
-        std::cout << "  Phase 3: Second execute() after stop()\n";
+        // Phase 3: Start again and add more tasks
+        std::cout << "  Phase 3: Second start() after stop()\n";
         completed.store(0);
-        t.execute();
+        t.start();
 
         std::cout << "  Adding new tasks after restart...\n";
         for (int i = 0; i < 3; i++)
@@ -165,9 +165,9 @@ int main()
 
         mtsLib::task t(2);
 
-        std::cout << "  Before execute(): isRunning() = " << std::boolalpha << t.isRunning() << "\n";
-        t.execute();
-        std::cout << "  After  execute(): isRunning() = " << t.isRunning() << "\n";
+        std::cout << "  Before start(): isRunning() = " << std::boolalpha << t.isRunning() << "\n";
+        t.start();
+        std::cout << "  After  start(): isRunning() = " << t.isRunning() << "\n";
         t.stop();
         std::cout << "  After  stop()   : isRunning() = " << t.isRunning() << "\n\n";
     }
@@ -177,7 +177,7 @@ int main()
         std::cout << "[Test 7] getQueuedTaskCount() and getTotalPendingTaskCount() - simple\n";
 
         mtsLib::task t(1); // single thread so we can reason about queue depth
-        t.execute();
+        t.start();
 
         // Block the single worker so queued tasks pile up
         std::mutex gate;
@@ -220,7 +220,7 @@ int main()
         std::cout << "[Test 8] waitForAll() with concurrent producers\n";
 
         mtsLib::task t(4);
-        t.execute();
+        t.start();
 
         constexpr int producerCount = 4;
         constexpr int tasksPerProducer = 25;
@@ -259,7 +259,7 @@ int main()
         std::cout << "[Test 9] waitForAll() with future results pipeline\n";
 
         mtsLib::task t(4);
-        t.execute();
+        t.start();
 
         constexpr int n = 10;
         std::vector<std::future<int>> futures;
@@ -290,11 +290,11 @@ int main()
         std::cout << "  Aggregation result: " << agg.get() << "\n\n";
     }
 
-    // --- Test 10: synchronizedExecute() - batch=false (default) ---
+    // --- Test 10: synchronizedStart() - batch=false (default) ---
     // Each worker picks up exactly one task, all tasks wait for every thread to
     // be ready before any of them starts executing, then threads exit.
     {
-        std::cout << "[Test 10] synchronizedExecute() - batch=false (one-shot synchronized start)\n";
+        std::cout << "[Test 10] synchronizedStart() - batch=false (one-shot synchronized start)\n";
 
         constexpr int threadCount = 4;
         mtsLib::task t(threadCount);
@@ -302,7 +302,7 @@ int main()
         std::vector<std::chrono::steady_clock::time_point> startTimes(threadCount);
         std::atomic<int> index{ 0 };
 
-        // Queue exactly threadCount tasks before calling synchronizedExecute so
+        // Queue exactly threadCount tasks before calling synchronizedStart so
         // every worker has a task to pick up before the latch fires.
         for (int i = 0; i < threadCount; i++)
         {
@@ -313,7 +313,7 @@ int main()
             });
         }
 
-        t.synchronizedExecute(false); // batch=false: threads exit after one task
+        t.synchronizedStart(false); // batch=false: threads exit after one task
 
         t.waitForAll();
 
@@ -325,10 +325,10 @@ int main()
         std::cout << "  Start-time spread: " << spreadUs << " us (should be small)\n\n";
     }
 
-    // --- Test 11: synchronizedExecute(true) - batch=true ---
+    // --- Test 11: synchronizedStart(true) - batch=true ---
     // Workers stay alive and process tasks in synchronized batches of threadCount.
     {
-        std::cout << "[Test 11] synchronizedExecute(true) - batched synchronized execution\n";
+        std::cout << "[Test 11] synchronizedStart(true) - batched synchronized execution\n";
 
         constexpr int threadCount = 3;
         constexpr int totalTasks  = 9; // 3 full batches
@@ -349,7 +349,7 @@ int main()
             });
         }
 
-        t.synchronizedExecute(true); // batch=true: workers keep running
+        t.synchronizedStart(true); // batch=true: workers keep running
 
         std::cout << "  All tasks submitted. Waiting for completion...\n";
 

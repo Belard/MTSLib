@@ -42,21 +42,21 @@ namespace mtsLib
              * @brief Start worker threads.
              * @throws std::runtime_error If called while executor is already running.
              */
-            void execute();
+            void start() override;
 
             /**
             * @brief Syncronize all tasks to start at the same time. (If there more tasks than threads, they will run in batches)
             * @param batch If true, tasks will run in batches of thread count. If false, the tasks will run as much as the threads allow at the same time and close.
             * @throws std::runtime_error If called while executor is already running.
             */
-            void synchronizedExecute(bool batch = false);
+            void synchronizedStart(bool batch = false);
 
             /**
              * @brief Signal workers to stop and join all threads.
              *
              * After this call, workers exit and queued tasks are no longer consumed.
              */
-            void stop();
+            void stop() override;
 
             /**
              * @brief Block until no pending and no queued tasks remain.

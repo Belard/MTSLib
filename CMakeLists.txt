@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # --- Library ---
 add_library(mtslib
     src/task.cpp
+    src/scheduler.cpp
 )
 
 target_include_directories(mtslib PUBLIC

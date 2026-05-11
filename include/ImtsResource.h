@@ -10,7 +10,7 @@ public:
     ImtsResource() : m_threadNumber(std::thread::hardware_concurrency()) {}
     ImtsResource(int threadNumber) : m_threadNumber(threadNumber) {};
     virtual ~ImtsResource() = default;
-    virtual void execute() = 0;
+    virtual void start() = 0;
     virtual void stop() = 0;
 
 protected:

@@ -10,10 +10,10 @@ namespace mtsLib
         stop();
     }
 
-    void task::execute()
+    void task::start()
     {
         if (isRunning())
-            throw std::runtime_error("MTSLib: execute() called while executor is already running");
+            throw std::runtime_error("MTSLib: start() called while executor is already running");
         m_stopTaskExecutor.store(false);
         for (auto i = 0; i < m_threadNumber; i++)
         {
@@ -21,10 +21,10 @@ namespace mtsLib
         }
     }
 
-    void task::synchronizedExecute(bool batch)
+    void task::synchronizedStart(bool batch)
     {
         if (isRunning())
-            throw std::runtime_error("MTSLib: synchronizedExecute() called while executor is already running");
+            throw std::runtime_error("MTSLib: synchronizedStart() called while executor is already running");
         m_stopTaskExecutor.store(false);
 
         auto taskBarrier = std::make_shared<std::barrier<>>(m_threadNumber);
